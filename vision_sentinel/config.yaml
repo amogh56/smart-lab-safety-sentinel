@@ -1,0 +1,43 @@
+# Smart Lab Safety Sentinel Configuration
+version: "1.0.0"
+
+camera:
+  source: 0 # 0 for default USB camera, RTSP URL, file path, or "MOCK" for simulator
+  width: 1280
+  height: 720
+  fps: 30
+
+model:
+  name: "peoplenet_fp16"
+  confidence_threshold: 0.65 # REQ-01 threshold
+  iou_threshold: 0.45
+  input_size: [640, 640]
+
+zone:
+  zone_id: "RESTRICTED_ZONE_A"
+  description: "High-voltage test bench & chemical storage perimeter"
+  # Normalized polygon [x, y] in range 0.0 to 1.0
+  polygon:
+    - [0.25, 0.45]
+    - [0.75, 0.45]
+    - [0.85, 0.95]
+    - [0.15, 0.95]
+  anchor_mode: "BOTTOM_CENTER" # Feet position on ground plane
+
+sentinel_logic:
+  debounce_frames: 3 # Consecutive frames inside zone to trigger alert
+  clear_window_ms: 3000 # REQ-05: Area clear duration before returning to normal
+  heartbeat_interval_ms: 2000 # Watchdog ping interval
+
+bridge:
+  mqtt:
+    enabled: true
+    broker: "127.0.0.1"
+    port: 1883
+    topic_alerts: "lab/safety/sentinel/alerts"
+    topic_heartbeat: "lab/safety/sentinel/heartbeat"
+  serial:
+    enabled: true
+    port: "/dev/ttyUSB0"
+    baudrate: 115200
+  log_file: "logs/sentinel_events.jsonl"

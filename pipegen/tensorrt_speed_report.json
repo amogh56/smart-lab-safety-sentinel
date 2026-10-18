@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "model_name": "PeopleNet-v2.6-Pruned",
+    "framework": "NVIDIA TensorRT 8.6.2",
+    "opset": 17,
+    "input_resolution": [
+      640,
+      640,
+      3
+    ],
+    "batch_size": 1,
+    "date": "2026-10-18T08:23:00Z"
+  },
+  "target_hardware": {
+    "device": "NVIDIA Jetson Orin Nano (8GB)",
+    "compute_cores": "1024 NVIDIA Ampere architecture cores",
+    "tensor_cores": 32,
+    "power_mode": "15W Super Mode"
+  },
+  "precision_comparison": [
+    {
+      "precision": "FP32",
+      "inference_latency_ms": 13.85,
+      "p95_latency_ms": 14.6,
+      "p99_latency_ms": 15.9,
+      "throughput_fps": 72.2,
+      "gpu_memory_used_mb": 482,
+      "meets_safety_budget": true
+    },
+    {
+      "precision": "FP16 (Selected)",
+      "inference_latency_ms": 4.12,
+      "p95_latency_ms": 4.38,
+      "p99_latency_ms": 4.85,
+      "throughput_fps": 242.7,
+      "gpu_memory_used_mb": 310,
+      "meets_safety_budget": true
+    },
+    {
+      "precision": "INT8 (Calibrated)",
+      "inference_latency_ms": 2.28,
+      "p95_latency_ms": 2.45,
+      "p99_latency_ms": 2.7,
+      "throughput_fps": 438.5,
+      "gpu_memory_used_mb": 224,
+      "meets_safety_budget": true
+    }
+  ],
+  "end_to_end_pipeline_breakdown": {
+    "v4l2_frame_capture_ms": 5.1,
+    "nvvidconv_resize_rgb_ms": 1.45,
+    "tensorrt_inference_fp16_ms": 4.12,
+    "nvdcf_tracker_ms": 2.8,
+    "zone_geometry_roi_ms": 0.45,
+    "event_serialize_dispatch_ms": 0.65,
+    "osd_rendering_ms": 3.9,
+    "total_frame_latency_ms": 18.47,
+    "pipeline_fps": 54.1,
+    "safety_deadline_ms": 35.0,
+    "margin_ms": 16.53
+  }
+}

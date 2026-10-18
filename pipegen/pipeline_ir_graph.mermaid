@@ -1,0 +1,24 @@
+```mermaid
+graph TD
+    classDef sourceStyle fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef processStyle fill:#0f172a,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+    classDef inferStyle fill:#311042,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
+    classDef logicStyle fill:#1e3a1e,stroke:#4ade80,stroke-width:2px,color:#f8fafc;
+    classDef alertStyle fill:#450a0a,stroke:#f87171,stroke-width:2px,color:#f8fafc;
+    classDef sinkStyle fill:#1e293b,stroke:#94a3b8,stroke-width:2px,color:#f8fafc;
+
+    V4L2["Camera Source<br/>(v4l2src /dev/video0 1080p@30)"]:::sourceStyle --> CONV["NvVideoConvert<br/>(NVMM Buffer RGBA 640x640)"]:::processStyle
+    CONV --> MUX["NvStreamMux<br/>(Batch Size: 1, 30 FPS)"]:::processStyle
+    MUX --> TRT["TensorRT Inference Engine<br/>(PeopleNet / YOLOv8 FP16)"]:::inferStyle
+    TRT --> TRACK["NvTracker<br/>(NvDCF Centroid Persistence)"]:::processStyle
+    TRACK --> ZONE["Zone Geometry & ROI Logic<br/>(Bottom-Center Anchor Point)"]:::logicStyle
+    
+    ZONE -->|"Intrusion Detected (Debounced 3f)"| EVENT["Event Dispatcher<br/>(Structured JSON Builder)"]:::alertStyle
+    ZONE -->|"Zone Normal / Cleared (3s delay)"| EVENT
+    ZONE --> OSD["NvDsOSD Visualizer<br/>(Bounding Box & Dynamic ROI HUD)"]:::processStyle
+    
+    EVENT -->|"MQTT Broker (Port 1883)"| MQTT["lab/safety/sentinel/alerts"]:::alertStyle
+    EVENT -->|"USB-UART Serial (115200)"| SERIAL["Edge Alarm Annunciator Sink<br/>(Red Strobe & 2.4kHz Siren)"]:::alertStyle
+    
+    OSD --> EGL["EGL Render Window<br/>(nveglglessink)"]:::sinkStyle
+```

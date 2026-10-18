@@ -1,0 +1,51 @@
+apiVersion: craftifai.com/pipegen/v0.5.1
+kind: VisionPipelineIR
+metadata:
+  name: smart-lab-safety-sentinel
+  description: Real-time person detection, tracking, and restricted zone intrusion alert system
+target:
+  hardware: NVIDIA_JETSON_ORIN
+  computeCapability: "8.7"
+  precision: FP16
+pipeline:
+  source:
+    type: V4L2Camera
+    device: /dev/video0
+    resolution: [1920, 1080]
+    framerate: 30
+  transform:
+    memory: NVMM
+    colorFormat: RGBA
+    resize: [640, 640]
+  inference:
+    engine: TensorRT
+    model: PeopleNet-ResNet34
+    precision: FP16
+    confidenceThreshold: 0.65
+    targetClasses: [person]
+  tracker:
+    algorithm: NvDCF
+    maxShadowTrackingFrames: 15
+    trackerDims: [640, 640]
+  zoneLogic:
+    zoneId: RESTRICTED_ZONE_A
+    anchorMode: BOTTOM_CENTER
+    polygon:
+      - [0.25, 0.45]
+      - [0.75, 0.45]
+      - [0.85, 0.95]
+      - [0.15, 0.95]
+    debounceFrames: 3
+    clearWindowMs: 3000
+  bridge:
+    mqtt:
+      broker: 127.0.0.1
+      port: 1883
+      alertsTopic: lab/safety/sentinel/alerts
+      heartbeatTopic: lab/safety/sentinel/heartbeat
+    serial:
+      port: /dev/ttyUSB0
+      baud: 115200
+  sink:
+    osdOverlay: true
+    renderer: nveglglessink

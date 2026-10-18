@@ -1,0 +1,171 @@
+{
+  "$schema": "https://schema.craftifai.com/pipegen/v0.5.1/pipeline-ir.json",
+  "pipeline_name": "smart_lab_safety_sentinel",
+  "version": "0.5.1",
+  "target_hardware": {
+    "family": "NVIDIA_JETSON_ORIN",
+    "compute_capability": "8.7",
+    "supported_platforms": ["Jetson Orin Nano", "Jetson Orin NX", "Jetson AGX Orin", "x86_64_RTX"]
+  },
+  "metadata": {
+    "description": "Real-time edge vision pipeline detecting human entry into restricted lab zones and dispatching JSON alerts to physical alarm annunciator and MQTT broker",
+    "author": "Smart Lab Safety Sentinel Engineering Team",
+    "created_at": "2026-10-18T08:20:00Z"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "node_v4l2_source",
+        "type": "SourceNode",
+        "plugin": "v4l2src",
+        "parameters": {
+          "device": "/dev/video0",
+          "width": 1920,
+          "height": 1080,
+          "framerate": "30/1",
+          "format": "YUY2"
+        },
+        "outputs": ["stream_raw_yuy2"]
+      },
+      {
+        "id": "node_nvvidconv_pre",
+        "type": "TransformNode",
+        "plugin": "nvvideoconvert",
+        "parameters": {
+          "memory_type": "NVMM",
+          "output_format": "RGBA",
+          "resize_width": 640,
+          "resize_height": 640
+        },
+        "inputs": ["stream_raw_yuy2"],
+        "outputs": ["stream_nvmm_rgba"]
+      },
+      {
+        "id": "node_nvstreammux",
+        "type": "BatchingNode",
+        "plugin": "nvstreammux",
+        "parameters": {
+          "batch_size": 1,
+          "batched_push_timeout": 33333,
+          "width": 640,
+          "height": 640,
+          "live_source": true
+        },
+        "inputs": ["stream_nvmm_rgba"],
+        "outputs": ["stream_batched_frames"]
+      },
+      {
+        "id": "node_nvinfer_primary",
+        "type": "InferenceEngineNode",
+        "plugin": "nvinfer",
+        "parameters": {
+          "config_file": "pgie_peoplenet_config.txt",
+          "model_type": "PRIMARY_DETECTOR",
+          "precision": "FP16",
+          "confidence_threshold": 0.65,
+          "target_classes": ["person"],
+          "model_input_dims": [1, 3, 640, 640]
+        },
+        "inputs": ["stream_batched_frames"],
+        "outputs": ["stream_detections"]
+      },
+      {
+        "id": "node_nvtracker",
+        "type": "TrackingNode",
+        "plugin": "nvtracker",
+        "parameters": {
+          "tracker_width": 640,
+          "tracker_height": 640,
+          "ll_lib_file": "libnvds_nvmultiobjecttracker.so",
+          "ll_config_file": "config_tracker_NvDCF_perf.yml",
+          "enable_batch_process": 1
+        },
+        "inputs": ["stream_detections"],
+        "outputs": ["stream_tracked_objects"]
+      },
+      {
+        "id": "node_zone_classifier",
+        "type": "CustomLogicNode",
+        "plugin": "py_zone_sentinel",
+        "parameters": {
+          "zone_id": "RESTRICTED_ZONE_A",
+          "roi_polygon_normalized": [
+            [0.25, 0.45],
+            [0.75, 0.45],
+            [0.85, 0.95],
+            [0.15, 0.95]
+          ],
+          "anchor_mode": "BOTTOM_CENTER",
+          "min_consecutive_intrusion_frames": 3,
+          "clear_recovery_window_ms": 3000
+        },
+        "inputs": ["stream_tracked_objects"],
+        "outputs": ["stream_classified_events", "stream_visual_metadata"]
+      },
+      {
+        "id": "node_event_dispatcher",
+        "type": "EventDispatcherNode",
+        "plugin": "sentinel_bridge",
+        "parameters": {
+          "mqtt": {
+            "enabled": true,
+            "broker": "127.0.0.1",
+            "port": 1883,
+            "topic_alerts": "lab/safety/sentinel/alerts",
+            "topic_heartbeat": "lab/safety/sentinel/heartbeat",
+            "heartbeat_interval_ms": 2000
+          },
+          "serial": {
+            "enabled": true,
+            "port": "/dev/ttyUSB0",
+            "baudrate": 115200,
+            "fallback_mock": true
+          },
+          "jsonl_log": {
+            "enabled": true,
+            "file_path": "logs/sentinel_events.jsonl"
+          }
+        },
+        "inputs": ["stream_classified_events"],
+        "outputs": ["bridge_telemetry"]
+      },
+      {
+        "id": "node_nvdsosd_display",
+        "type": "VisualizationNode",
+        "plugin": "nvdsosd",
+        "parameters": {
+          "display_text": true,
+          "display_bbox": true,
+          "font_size": 14,
+          "zone_colors": {
+            "normal": [0.0, 1.0, 0.0, 0.3],
+            "alert": [1.0, 0.0, 0.0, 0.6]
+          }
+        },
+        "inputs": ["stream_visual_metadata"],
+        "outputs": ["stream_rendered_display"]
+      },
+      {
+        "id": "node_sink_gl",
+        "type": "SinkNode",
+        "plugin": "nveglglessink",
+        "parameters": {
+          "sync": false,
+          "qos": false
+        },
+        "inputs": ["stream_rendered_display"],
+        "outputs": []
+      }
+    ],
+    "connections": [
+      {"from": "node_v4l2_source:stream_raw_yuy2", "to": "node_nvvidconv_pre:stream_raw_yuy2"},
+      {"from": "node_nvvidconv_pre:stream_nvmm_rgba", "to": "node_nvstreammux:stream_nvmm_rgba"},
+      {"from": "node_nvstreammux:stream_batched_frames", "to": "node_nvinfer_primary:stream_batched_frames"},
+      {"from": "node_nvinfer_primary:stream_detections", "to": "node_nvtracker:stream_detections"},
+      {"from": "node_nvtracker:stream_tracked_objects", "to": "node_zone_classifier:stream_tracked_objects"},
+      {"from": "node_zone_classifier:stream_classified_events", "to": "node_event_dispatcher:stream_classified_events"},
+      {"from": "node_zone_classifier:stream_visual_metadata", "to": "node_nvdsosd_display:stream_visual_metadata"},
+      {"from": "node_nvdsosd_display:stream_rendered_display", "to": "node_sink_gl:stream_rendered_display"}
+    ]
+  }
+}
