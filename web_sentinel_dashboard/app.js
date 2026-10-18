@@ -198,16 +198,47 @@ function initAudioContext() {
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
+      try {
+        audioCtx = new AudioContextClass();
+      } catch (e) {
+        console.warn("AudioContext init error:", e);
+      }
     }
   }
+  if (audioCtx && audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+
+// Global user gesture unlock for browser Autoplay policy:
+// Any user interaction (click, tap, keypress) unlocks AudioContext immediately!
+function setupAudioAutoUnlock() {
+  const unlock = () => {
+    initAudioContext();
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+  };
+  ["pointerdown", "mousedown", "click", "touchstart", "keydown"].forEach(evt => {
+    window.addEventListener(evt, unlock, { passive: true });
+  });
 }
 
 function startBuzzerSound() {
-  if (state.audioMuted || !audioCtx) return;
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume();
+  if (state.audioMuted) return;
+
+  // Auto-initialize audio context if not yet active
+  if (!audioCtx) {
+    initAudioContext();
   }
+  if (!audioCtx) return;
+
+  // Attempt resume if browser suspended it
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+
   if (!state.isAudioToneActive) {
     try {
       buzzerOsc = audioCtx.createOscillator();
@@ -216,8 +247,9 @@ function startBuzzerSound() {
       buzzerOsc.type = "sawtooth";
       buzzerOsc.frequency.setValueAtTime(state.buzzerFreqHz, audioCtx.currentTime);
 
-      // Low volume for comfortable laboratory simulation
-      buzzerGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      // 5 Hz pulsed audible alarm (0.04 volume on strobe pulse)
+      const initialGain = strobePhase ? 0.04 : 0.00;
+      buzzerGain.gain.setValueAtTime(initialGain, audioCtx.currentTime);
 
       buzzerOsc.connect(buzzerGain);
       buzzerGain.connect(audioCtx.destination);
@@ -227,12 +259,21 @@ function startBuzzerSound() {
     } catch (e) {
       console.warn("Audio start error:", e);
     }
+  } else if (buzzerGain) {
+    // Pulse volume synchronously with 5 Hz visual strobe (REQ-04)
+    try {
+      const targetGain = strobePhase ? 0.04 : 0.00;
+      buzzerGain.gain.setValueAtTime(targetGain, audioCtx.currentTime);
+    } catch (e) {}
   }
 }
 
 function stopBuzzerSound() {
   if (state.isAudioToneActive && buzzerOsc) {
     try {
+      if (buzzerGain && audioCtx) {
+        buzzerGain.gain.setValueAtTime(0, audioCtx.currentTime);
+      }
       buzzerOsc.stop();
       buzzerOsc.disconnect();
     } catch (e) {}
@@ -1333,10 +1374,11 @@ function initEventListeners() {
 window.addEventListener("DOMContentLoaded", () => {
   initWebcamDetector();
   initRoiDragInteractions();
-  initEventListeners();
-
+  setupAudioAutoUnlock();
+  initAudioContext();
   appendSerialLog("[BOOT] Smart Lab Safety Sentinel Cockpit v0.5.1 initialized.", "success");
   appendSerialLog("[TARGET] Edge Hardware: NVIDIA Jetson Orin Nano (15W Mode).", "info");
+  appendSerialLog("[AUDIO] 2.4kHz Warning Buzzer armed (Default: ON).", "info");
   appendSerialLog("[BRIDGE] Communication Bridge connected (MQTT 1883 & USB-UART 115200).", "info");
 
   // Start Animation Loop
