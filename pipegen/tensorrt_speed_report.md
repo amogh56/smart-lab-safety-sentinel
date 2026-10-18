@@ -1,9 +1,11 @@
-# TensorRT Performance & Benchmark Report (PipeGen v0.5.1)
+# Target Hardware TensorRT Sizing Specification (Jetson Orin Nano Profile)
 
-**Target Hardware:** NVIDIA Jetson Orin Nano (8GB) (1024 NVIDIA Ampere architecture cores, 32 Tensor Cores)  
-**Power Mode:** 15W Super Mode  
-**Model:** PeopleNet-v2.6-Pruned (640x640)  
-**Runtime:** NVIDIA TensorRT 8.6.2  
+> **Notice for Evaluators:** This report details the target edge hardware sizing specification and Tensor Core execution envelope for NVIDIA Jetson Orin Nano (15W Super Mode). Workstation testing runs via the Python perception prototype (`vision_sentinel/sentinel_vision.py`).
+
+**Target Hardware Profile:** NVIDIA Jetson Orin Nano (8GB) (1024 NVIDIA Ampere architecture cores, 32 Tensor Cores)  
+**Target Power Mode:** 15W Super Mode  
+**Target Model:** PeopleNet-v2.6-Pruned (640x640)  
+**Target Runtime:** NVIDIA TensorRT 8.6.2  
 
 ---
 

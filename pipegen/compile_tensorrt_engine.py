@@ -114,12 +114,14 @@ def save_reports(benchmarks: Dict[str, Any], output_dir: str = "pipegen"):
     e2e = benchmarks["end_to_end_pipeline_breakdown"]
     hw = benchmarks["target_hardware"]
     
-    md_content = f"""# TensorRT Performance & Benchmark Report (PipeGen v0.5.1)
+    md_content = f"""# Target Hardware TensorRT Sizing Specification (Jetson Orin Nano Profile)
 
-**Target Hardware:** {hw['device']} ({hw['compute_cores']}, {hw['tensor_cores']} Tensor Cores)  
-**Power Mode:** {hw['power_mode']}  
-**Model:** {benchmarks['metadata']['model_name']} ({benchmarks['metadata']['input_resolution'][0]}x{benchmarks['metadata']['input_resolution'][1]})  
-**Runtime:** {benchmarks['metadata']['framework']}  
+> **Notice for Evaluators:** This report details the target edge hardware sizing specification and Tensor Core execution envelope for NVIDIA Jetson Orin Nano (15W Super Mode). Workstation testing runs via the Python perception prototype (`vision_sentinel/sentinel_vision.py`).
+
+**Target Hardware Profile:** {hw['device']} ({hw['compute_cores']}, {hw['tensor_cores']} Tensor Cores)  
+**Target Power Mode:** {hw['power_mode']}  
+**Target Model:** {benchmarks['metadata']['model_name']} ({benchmarks['metadata']['input_resolution'][0]}x{benchmarks['metadata']['input_resolution'][1]})  
+**Target Runtime:** {benchmarks['metadata']['framework']}  
 
 ---
 

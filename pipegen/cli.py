@@ -27,8 +27,7 @@ def get_root_dir():
     for _ in range(5):
         if (p / "pipegen" / "pipeline_ir.json").exists():
             return p
-        p = p.parent
-    return Path("/Users/amoghyalameli/.gemini/antigravity-ide/scratch/smart-lab-safety-sentinel")
+    return Path(__file__).resolve().parent.parent
 
 ROOT_DIR = get_root_dir()
 PIPEGEN_DIR = ROOT_DIR / "pipegen"
