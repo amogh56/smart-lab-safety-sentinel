@@ -128,8 +128,14 @@
               <!-- Main Canvas Overlay (bounding boxes, ROI, foot anchors, HUD) -->
               <canvas id="sentinelCanvas" width="960" height="540"></canvas>
 
-              <!-- Hidden Video Element for Physical USB Webcam Stream -->
-              <video id="liveWebcamVideo" playsinline autoplay muted style="display: none;"></video>
+              <!-- Offscreen Video Element for Physical USB Webcam Stream (guarantees frame decoding across all browsers) -->
+              <video id="liveWebcamVideo" playsinline autoplay muted style="position: fixed; top: -9999px; left: -9999px; width: 640px; height: 360px; opacity: 0; pointer-events: none;"></video>
+
+              <!-- Floating Quick Webcam Toggle Button -->
+              <button class="viewport-quick-cam-btn" id="btnQuickWebcamToggle" title="Toggle Real Physical Webcam Feed">
+                <span class="cam-icon">📹</span>
+                <span id="quickWebcamLabel">Switch to Real Physical Webcam</span>
+              </button>
 
               <!-- Tactical Reticle & Calibration Watermark -->
               <div class="tactical-hud-watermark">

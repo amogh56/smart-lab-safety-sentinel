@@ -108,6 +108,8 @@ const camDeviceIdDisplay = $("camDeviceIdDisplay");
 // Camera Controls
 const btnCamSynthetic = $("btnCamSynthetic");
 const btnCamPhysical = $("btnCamPhysical");
+const btnQuickWebcamToggle = $("btnQuickWebcamToggle");
+const quickWebcamLabel = $("quickWebcamLabel");
 
 // Top Nav Metrics
 const metricFps = $("metricFps");
@@ -613,7 +615,7 @@ function initWebcamDetector() {
 async function startPhysicalCamera() {
   initAudioContext();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Webcam access is not supported by your browser in this context.");
+    alert("Webcam access is not supported by your browser in this context (requires HTTPS or localhost).");
     return;
   }
 
@@ -622,7 +624,7 @@ async function startPhysicalCamera() {
       state.webcamStream.getTracks().forEach(t => t.stop());
     }
 
-    // High quality progressive constraints
+    // High quality progressive constraints with fallbacks
     let stream = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -630,28 +632,42 @@ async function startPhysicalCamera() {
         audio: false
       });
     } catch (e1) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch (e2) {
+        throw e2;
+      }
     }
 
     state.webcamStream = stream;
     if (video) {
       video.srcObject = stream;
-      await video.play();
+      await video.play().catch(err => console.warn("Video play error:", err));
     }
 
     state.cameraMode = "physical";
     if (btnCamPhysical) btnCamPhysical.classList.add("active");
     if (btnCamSynthetic) btnCamSynthetic.classList.remove("active");
+
+    const track = stream.getVideoTracks()[0];
+    const devName = track && track.label ? track.label : "Physical USB / Integrated Sensor";
+    if (camDeviceIdDisplay) {
+      camDeviceIdDisplay.textContent = devName.length > 24 ? devName.substring(0, 24) + "..." : devName;
+    }
+
     if (feedStatusPill) {
-      feedStatusPill.textContent = "PHYSICAL USB CAM ACTIVE • 1080p";
+      feedStatusPill.textContent = "LIVE PHYSICAL WEBCAM ACTIVE • 1080p";
       feedStatusPill.className = "stream-pill live-pill text-emerald";
     }
 
-    appendSerialLog("[CAMERA] Switched to physical USB camera (/dev/video0) stream.", "info");
-    appendAgentReasoning("[CAMERA_INPUT] Connected physical camera sensor. Real-time vision pipeline running on live frames.");
+    if (btnQuickWebcamToggle) btnQuickWebcamToggle.classList.add("is-active");
+    if (quickWebcamLabel) quickWebcamLabel.textContent = "Switch to Simulated Lab Video";
+
+    appendSerialLog(`[CAMERA] Attached live physical webcam: ${devName}`, "success");
+    appendAgentReasoning(`[CAMERA_INPUT] Connected physical camera sensor (${devName}). Real-time vision pipeline running on live frames.`);
   } catch (err) {
     console.error("Camera access failed:", err);
-    alert(`Could not open camera: ${err.message}. Reverting to simulated feed.`);
+    alert(`Could not open physical webcam: ${err.message}\nEnsure browser camera permission is allowed for this site.`);
     switchToSynthetic();
   }
 }
@@ -664,10 +680,13 @@ function switchToSynthetic() {
   state.cameraMode = "synthetic";
   if (btnCamSynthetic) btnCamSynthetic.classList.add("active");
   if (btnCamPhysical) btnCamPhysical.classList.remove("active");
+  if (camDeviceIdDisplay) camDeviceIdDisplay.textContent = "/dev/video0";
   if (feedStatusPill) {
     feedStatusPill.textContent = "STREAM ACTIVE • 1080p @ 30FPS";
     feedStatusPill.className = "stream-pill live-pill";
   }
+  if (btnQuickWebcamToggle) btnQuickWebcamToggle.classList.remove("is-active");
+  if (quickWebcamLabel) quickWebcamLabel.textContent = "Switch to Real Physical Webcam";
   appendSerialLog("[CAMERA] Switched to simulated laboratory feed.", "info");
 }
 
@@ -698,8 +717,9 @@ function processWebcamFrame() {
       }
     }
 
-    // Motion threshold for human movement
+    // Motion threshold for human presence
     if (diffPixels > 80 && maxX > minX && maxY > minY) {
+      state.lastWebcamMotionTime = Date.now();
       const cw = canvas.width;
       const ch = canvas.height;
       const scaleX = cw / 160;
@@ -713,14 +733,14 @@ function processWebcamFrame() {
       webcamDetectedBoxes = [{
         x: bx,
         y: by,
-        width: Math.min(180, bw),
-        height: Math.min(320, bh),
+        width: Math.min(220, bw),
+        height: Math.min(360, bh),
         confidence: Math.min(0.96, 0.70 + (diffPixels / 1000)),
         id: 202
       }];
     } else {
-      // Gentle decay if stationary
-      if (webcamDetectedBoxes.length > 0 && Math.random() < 0.08) {
+      // Retain detection box for 3.5 seconds if person stands still in zone
+      if (Date.now() - (state.lastWebcamMotionTime || 0) > 3500) {
         webcamDetectedBoxes = [];
       }
     }
@@ -996,9 +1016,22 @@ function renderFrame(now) {
   const ch = canvas.height;
 
   // 1. Draw Background / Video Stream
-  if (state.cameraMode === "physical" && video && video.readyState >= 2) {
-    ctx.drawImage(video, 0, 0, cw, ch);
-    processWebcamFrame();
+  if (state.cameraMode === "physical") {
+    if (video && video.readyState >= 2) {
+      ctx.drawImage(video, 0, 0, cw, ch);
+      processWebcamFrame();
+    } else {
+      // Connecting to physical camera - show clean tactical standby screen
+      ctx.fillStyle = "#070c18";
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 15px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("CONNECTING TO PHYSICAL WEBCAM SENSOR...", cw / 2, ch / 2 - 10);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "12px 'Plus Jakarta Sans', sans-serif";
+      ctx.fillText("Please grant camera permissions if prompted by your browser", cw / 2, ch / 2 + 18);
+    }
   } else {
     drawLaboratoryBackground(cw, ch);
     updateSimulatedActor(cw, ch);
@@ -1161,6 +1194,15 @@ function initEventListeners() {
   }
   if (btnCamPhysical) {
     btnCamPhysical.addEventListener("click", () => startPhysicalCamera());
+  }
+  if (btnQuickWebcamToggle) {
+    btnQuickWebcamToggle.addEventListener("click", () => {
+      if (state.cameraMode === "physical") {
+        switchToSynthetic();
+      } else {
+        startPhysicalCamera();
+      }
+    });
   }
 
   // Audio Toggle
