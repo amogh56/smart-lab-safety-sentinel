@@ -955,11 +955,17 @@ function drawTrackedPerson(actor, poly) {
   // Person Avatar (Head & Torso Representation)
   ctx.fillStyle = isInside ? "rgba(239, 68, 68, 0.6)" : "rgba(56, 189, 248, 0.5)";
   ctx.beginPath();
-  ctx.arc(ax + (aw / 2), ay + 26, 18, 0, Math.PI * 2);
+  ctx.arc(ax + (aw / 2), ay + 26, Math.max(8, Math.min(18, aw / 4)), 0, Math.PI * 2);
   ctx.fill();
 
+  const torsoW = Math.max(10, aw - 36);
+  const torsoH = Math.max(10, ah - 65);
   ctx.beginPath();
-  ctx.roundRect(ax + 18, ay + 50, aw - 36, ah - 65, 8);
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(ax + (aw - torsoW) / 2, ay + 50, torsoW, torsoH, 6);
+  } else {
+    ctx.rect(ax + (aw - torsoW) / 2, ay + 50, torsoW, torsoH);
+  }
   ctx.fill();
 
   // Label tags
@@ -1413,11 +1419,13 @@ function initEventListeners() {
 // ============================================================================
 // 13. BOOTSTRAP ENTRY POINT
 // ============================================================================
-window.addEventListener("DOMContentLoaded", () => {
+function bootstrap() {
   initWebcamDetector();
   initRoiDragInteractions();
+  initEventListeners();
   setupAudioAutoUnlock();
   initAudioContext();
+
   appendSerialLog("[BOOT] Smart Lab Safety Sentinel Cockpit v0.5.1 initialized.", "success");
   appendSerialLog("[TARGET] Edge Hardware: NVIDIA Jetson Orin Nano (15W Mode).", "info");
   appendSerialLog("[AUDIO] 2.4kHz Warning Buzzer armed (Default: ON).", "info");
@@ -1425,4 +1433,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // Start Animation Loop
   requestAnimationFrame(renderFrame);
-});
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", bootstrap);
+} else {
+  bootstrap();
+}
